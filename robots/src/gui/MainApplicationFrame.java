@@ -1,20 +1,12 @@
 package gui;
 
 import gui.handler.ExitHandler;
+import gui.utils.WindowStateManager;
 
-import java.awt.Dimension;
-import java.awt.Toolkit;
+import java.awt.*;
 import java.awt.event.KeyEvent;
-import javax.swing.JDesktopPane;
-import javax.swing.JFrame;
-import javax.swing.JInternalFrame;
-import javax.swing.JMenu;
-import javax.swing.JMenuBar;
-import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
-import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
+import javax.swing.*;
+import java.io.File;
 import log.Logger;
 
 public class MainApplicationFrame extends JFrame {
@@ -33,12 +25,12 @@ public class MainApplicationFrame extends JFrame {
 
         // Создаем и добавляем окно лога
         LogWindow logWindow = createLogWindow();
-        addWindow(logWindow);
+        addWindow(logWindow, "logWindow");
 
         // Создаем и добавляем игровое окно
         GameWindow gameWindow = new GameWindow();
         gameWindow.setSize(400, 400);
-        addWindow(gameWindow);
+        addWindow(gameWindow, "gameWindow");
 
         // Инициализируем обработчик выхода
         exitHandler = new ExitHandler(this);
@@ -50,6 +42,7 @@ public class MainApplicationFrame extends JFrame {
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new java.awt.event.WindowAdapter() {
             public void windowClosing(java.awt.event.WindowEvent e) {
+                saveAllWindowsState(); // Сохраняем состояние окон перед выходом
                 exitHandler.confirmAndExit(null); // Передаем null для главного окна
             }
         });
@@ -65,21 +58,35 @@ public class MainApplicationFrame extends JFrame {
         return logWindow;
     }
 
-    protected void addWindow(JInternalFrame frame) {
+    protected void addWindow(JInternalFrame frame, String windowId) {
         desktopPane.add(frame);
         frame.setVisible(true);
-        setupInternalFrame(frame); // Настраиваем поведение при закрытии
+        setupInternalFrame(frame, windowId); // Настраиваем поведение при закрытии
+        WindowStateManager.restoreWindowState(frame, windowId); // Восстанавливаем состояние окна
     }
 
-    private void setupInternalFrame(JInternalFrame frame) {
+    private void setupInternalFrame(JInternalFrame frame, String windowId) {
         frame.setDefaultCloseOperation(JInternalFrame.DO_NOTHING_ON_CLOSE);
         frame.addInternalFrameListener(new javax.swing.event.InternalFrameAdapter() {
             public void internalFrameClosing(javax.swing.event.InternalFrameEvent e) {
+                WindowStateManager.saveWindowState(frame, windowId); // Сохраняем состояние окна перед закрытием
                 exitHandler.confirmAndExit(frame); // Передаем текущее внутреннее окно
             }
         });
     }
 
+    // Сохраняем состояние всех окон перед выходом
+    private void saveAllWindowsState() {
+        for (JInternalFrame frame : desktopPane.getAllFrames()) {
+            if (frame instanceof LogWindow) {
+                WindowStateManager.saveWindowState(frame, "logWindow");
+            } else if (frame instanceof GameWindow) {
+                WindowStateManager.saveWindowState(frame, "gameWindow");
+            }
+        }
+    }
+
+    // Генерация меню (остается без изменений)
     private JMenuBar generateMenuBar() {
         JMenuBar menuBar = new JMenuBar();
 
@@ -89,7 +96,10 @@ public class MainApplicationFrame extends JFrame {
 
         // Пункт меню "Выход"
         JMenuItem exitMenuItem = new JMenuItem("Выход", KeyEvent.VK_Q);
-        exitMenuItem.addActionListener((event) -> exitHandler.confirmAndExit(null)); // Передаем null для главного окна
+        exitMenuItem.addActionListener((event) -> {
+            saveAllWindowsState(); // Сохраняем состояние окон перед выходом
+            exitHandler.confirmAndExit(null); // Передаем null для главного окна
+        });
         fileMenu.add(exitMenuItem);
 
         // Меню "Режим отображения"
