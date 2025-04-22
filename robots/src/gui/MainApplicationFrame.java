@@ -1,20 +1,18 @@
 package gui;
 
-import gui.handler.ExitHandler;
-import gui.utils.WindowStateManager;
-
 import java.awt.*;
-import java.awt.event.KeyEvent;
+import java.awt.event.*;
+import java.io.IOException;
+import java.util.List;
 import javax.swing.*;
-import java.io.File;
 import log.Logger;
 
 public class MainApplicationFrame extends JFrame {
     private final JDesktopPane desktopPane = new JDesktopPane();
-    private final ExitHandler exitHandler;
+    private LogWindow logWindow;
+    private GameWindow gameWindow;
 
     public MainApplicationFrame() {
-        // Устанавливаем размеры окна
         int inset = 50;
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
         setBounds(inset, inset,
@@ -23,29 +21,76 @@ public class MainApplicationFrame extends JFrame {
 
         setContentPane(desktopPane);
 
-        // Создаем и добавляем окно лога
-        LogWindow logWindow = createLogWindow();
-        addWindow(logWindow, "logWindow");
+        loadWindowStates();
 
-        // Создаем и добавляем игровое окно
-        GameWindow gameWindow = new GameWindow();
-        gameWindow.setSize(400, 400);
-        addWindow(gameWindow, "gameWindow");
-
-        // Инициализируем обработчик выхода
-        exitHandler = new ExitHandler(this);
-
-        // Устанавливаем меню
         setJMenuBar(generateMenuBar());
 
-        // Обработка закрытия главного окна
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
-        addWindowListener(new java.awt.event.WindowAdapter() {
-            public void windowClosing(java.awt.event.WindowEvent e) {
-                saveAllWindowsState(); // Сохраняем состояние окон перед выходом
-                exitHandler.confirmAndExit(null); // Передаем null для главного окна
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                confirmAndExit(null);
             }
         });
+    }
+
+    private void loadWindowStates() {
+        try {
+            List<WindowState> states = WindowStateManager.loadStates();
+
+            if (states.isEmpty()) {
+                // Создание окон с настройками по умолчанию
+                logWindow = createLogWindow();
+                gameWindow = new GameWindow();
+                gameWindow.setSize(400, 400);
+            } else {
+                // Восстановление окон из сохраненных состояний
+                for (WindowState state : states) {
+                    switch (state.getWindowType()) {
+                        case "LogWindow":
+                            logWindow = createLogWindow();
+                            logWindow.setLocation(state.getX(), state.getY());
+                            logWindow.setSize(state.getWidth(), state.getHeight());
+                            break;
+                        case "GameWindow":
+                            gameWindow = new GameWindow();
+                            gameWindow.setLocation(state.getX(), state.getY());
+                            gameWindow.setSize(state.getWidth(), state.getHeight());
+                            break;
+                    }
+                }
+            }
+
+            addWindow(logWindow);
+            addWindow(gameWindow);
+
+        } catch (IOException e) {
+            Logger.error("Ошибка загрузки состояний окон: " + e.getMessage());
+            JOptionPane.showMessageDialog(this,
+                    "Не удалось загрузить состояния окон",
+                    "Ошибка",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void saveWindowStates() {
+        try {
+            List<WindowState> states = List.of(
+                    new WindowState("LogWindow",
+                            logWindow.getX(), logWindow.getY(),
+                            logWindow.getWidth(), logWindow.getHeight()),
+                    new WindowState("GameWindow",
+                            gameWindow.getX(), gameWindow.getY(),
+                            gameWindow.getWidth(), gameWindow.getHeight())
+            );
+            WindowStateManager.saveStates(states);
+        } catch (IOException e) {
+            Logger.error("Ошибка сохранения состояний окон: " + e.getMessage());
+            JOptionPane.showMessageDialog(this,
+                    "Не удалось сохранить состояния окон",
+                    "Ошибка",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     protected LogWindow createLogWindow() {
@@ -58,57 +103,39 @@ public class MainApplicationFrame extends JFrame {
         return logWindow;
     }
 
-    protected void addWindow(JInternalFrame frame, String windowId) {
+    protected void addWindow(JInternalFrame frame) {
         desktopPane.add(frame);
         frame.setVisible(true);
-        setupInternalFrame(frame, windowId); // Настраиваем поведение при закрытии
-        WindowStateManager.restoreWindowState(frame, windowId); // Восстанавливаем состояние окна
+        setupInternalFrame(frame);
     }
 
-    private void setupInternalFrame(JInternalFrame frame, String windowId) {
+    private void setupInternalFrame(JInternalFrame frame) {
         frame.setDefaultCloseOperation(JInternalFrame.DO_NOTHING_ON_CLOSE);
         frame.addInternalFrameListener(new javax.swing.event.InternalFrameAdapter() {
+            @Override
             public void internalFrameClosing(javax.swing.event.InternalFrameEvent e) {
-                WindowStateManager.saveWindowState(frame, windowId); // Сохраняем состояние окна перед закрытием
-                exitHandler.confirmAndExit(frame); // Передаем текущее внутреннее окно
+                confirmAndExit(frame);
             }
         });
     }
 
-    // Сохраняем состояние всех окон перед выходом
-    private void saveAllWindowsState() {
-        for (JInternalFrame frame : desktopPane.getAllFrames()) {
-            if (frame instanceof LogWindow) {
-                WindowStateManager.saveWindowState(frame, "logWindow");
-            } else if (frame instanceof GameWindow) {
-                WindowStateManager.saveWindowState(frame, "gameWindow");
-            }
-        }
-    }
-
-    // Генерация меню (остается без изменений)
     private JMenuBar generateMenuBar() {
         JMenuBar menuBar = new JMenuBar();
 
-        // Меню "Файл"
         JMenu fileMenu = new JMenu("Файл");
         fileMenu.setMnemonic(KeyEvent.VK_F);
 
-        // Пункт меню "Выход"
-        JMenuItem exitMenuItem = new JMenuItem("Выход", KeyEvent.VK_Q);
+        JMenuItem exitMenuItem = new JMenuItem("Выход", KeyEvent.VK_S);
         exitMenuItem.addActionListener((event) -> {
-            saveAllWindowsState(); // Сохраняем состояние окон перед выходом
-            exitHandler.confirmAndExit(null); // Передаем null для главного окна
+            dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING));
         });
         fileMenu.add(exitMenuItem);
 
-        // Меню "Режим отображения"
         JMenu lookAndFeelMenu = new JMenu("Режим отображения");
         lookAndFeelMenu.setMnemonic(KeyEvent.VK_V);
         lookAndFeelMenu.getAccessibleContext().setAccessibleDescription(
                 "Управление режимом отображения приложения");
 
-        // Пункт меню "Системная схема"
         JMenuItem systemLookAndFeel = new JMenuItem("Системная схема", KeyEvent.VK_S);
         systemLookAndFeel.addActionListener((event) -> {
             setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -116,7 +143,6 @@ public class MainApplicationFrame extends JFrame {
         });
         lookAndFeelMenu.add(systemLookAndFeel);
 
-        // Пункт меню "Универсальная схема"
         JMenuItem crossplatformLookAndFeel = new JMenuItem("Универсальная схема", KeyEvent.VK_U);
         crossplatformLookAndFeel.addActionListener((event) -> {
             setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
@@ -124,20 +150,17 @@ public class MainApplicationFrame extends JFrame {
         });
         lookAndFeelMenu.add(crossplatformLookAndFeel);
 
-        // Меню "Тесты"
         JMenu testMenu = new JMenu("Тесты");
         testMenu.setMnemonic(KeyEvent.VK_T);
         testMenu.getAccessibleContext().setAccessibleDescription(
                 "Тестовые команды");
 
-        // Пункт меню "Сообщение в лог"
         JMenuItem addLogMessageItem = new JMenuItem("Сообщение в лог", KeyEvent.VK_M);
         addLogMessageItem.addActionListener((event) -> {
             Logger.debug("Новая строка");
         });
         testMenu.add(addLogMessageItem);
 
-        // Добавляем все меню в менюбар
         menuBar.add(fileMenu);
         menuBar.add(lookAndFeelMenu);
         menuBar.add(testMenu);
@@ -145,14 +168,36 @@ public class MainApplicationFrame extends JFrame {
         return menuBar;
     }
 
-    // Метод для установки темы
-    public void setLookAndFeel(String className) {
+    private void confirmAndExit(JInternalFrame frame) {
+        int option = JOptionPane.showOptionDialog(
+                this,
+                "Вы уверены, что хотите закрыть это окно?",
+                "Подтверждение выхода",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                new Object[]{"Да", "Нет"},
+                "Нет"
+        );
+
+        if (option == JOptionPane.YES_OPTION) {
+            if (frame == null) {
+                saveWindowStates(); // Сохраняем состояния перед выходом
+                dispose();
+                System.exit(0);
+            } else {
+                frame.dispose();
+            }
+        }
+    }
+
+    private void setLookAndFeel(String className) {
         try {
             UIManager.setLookAndFeel(className);
             SwingUtilities.updateComponentTreeUI(this);
         } catch (ClassNotFoundException | InstantiationException
                  | IllegalAccessException | UnsupportedLookAndFeelException e) {
-            e.printStackTrace();
+            Logger.error("Ошибка установки темы: " + e.getMessage());
         }
     }
 }
