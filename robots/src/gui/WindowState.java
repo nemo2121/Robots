@@ -1,21 +1,25 @@
 package gui;
 
-public class WindowState {
-    private final String windowType; // "LogWindow" или "GameWindow"
-    private final int x, y, width, height;
+import java.awt.Rectangle;
+import java.io.Serializable;
 
-    public WindowState(String windowType, int x, int y, int width, int height) {
-        this.windowType = windowType;
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
+public class WindowState implements Serializable {
+    private String windowName;
+    private Rectangle bounds;
+    private boolean isCollapsed;
+
+
+    public WindowState(String windowName, Rectangle bounds, boolean isCollapsed) {
+        this.windowName = windowName;
+        this.bounds = bounds;
+        this.isCollapsed = isCollapsed;
     }
 
-    // Геттеры
-    public String getWindowType() { return windowType; }
-    public int getX() { return x; }
-    public int getY() { return y; }
-    public int getWidth() { return width; }
-    public int getHeight() { return height; }
+    public Rectangle getBounds() {
+        return bounds;
+    }
+
+    public boolean isCollapsed() {
+        return isCollapsed;
+    }
 }

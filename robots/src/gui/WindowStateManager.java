@@ -1,47 +1,66 @@
 package gui;
 
+import javax.swing.*;
+import java.awt.*;
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
 
 public class WindowStateManager {
-    private static final String FILE_PATH = "window_states.txt";
+    private static final String CONFIG_FILE = System.getProperty("user.home") + "/app_config";
 
-    public static void saveStates(List<WindowState> states) throws IOException {
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(FILE_PATH))) {
-            for (WindowState state : states) {
-                writer.write(String.format(
-                        "%s %d %d %d %d\n",
-                        state.getWindowType(),
-                        state.getX(),
-                        state.getY(),
-                        state.getWidth(),
-                        state.getHeight()
-                ));
+    public void saveWindowStates(JDesktopPane desktopPane) {
+        Map<String, WindowState> windowStates = new HashMap<>();
+
+        for (JInternalFrame frame : desktopPane.getAllFrames()) {
+            String windowName = frame.getName();
+            if (windowName == null) {
+                System.err.println("Окно без имени: " + frame.getTitle());
+                continue;
             }
+            Rectangle bounds = frame.getBounds();
+            boolean isIcon = frame.isIcon();
+
+            windowStates.put(windowName, new WindowState(windowName, bounds, isIcon));
+        }
+
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(CONFIG_FILE))) {
+            oos.writeObject(windowStates);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
-    public static List<WindowState> loadStates() throws IOException {
-        List<WindowState> states = new ArrayList<>();
-        File file = new File(FILE_PATH);
-        if (!file.exists()) return states;
-
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(" ");
-                if (parts.length != 5) continue;
-
-                states.add(new WindowState(
-                        parts[0],  // тип
-                        Integer.parseInt(parts[1]),  // x
-                        Integer.parseInt(parts[2]),  // y
-                        Integer.parseInt(parts[3]),  // ширина
-                        Integer.parseInt(parts[4])   // высота
-                ));
-            }
+    public void loadWindowStates(JDesktopPane desktopPane) {
+        if (!Files.exists(Paths.get(CONFIG_FILE))) {
+            return;
         }
-        return states;
+
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(CONFIG_FILE))) {
+            @SuppressWarnings("unchecked")
+            Map<String, WindowState> windowStates = (Map<String, WindowState>) ois.readObject();
+
+            for (Map.Entry<String, WindowState> entry : windowStates.entrySet()) {
+                String windowName = entry.getKey();
+                WindowState state = entry.getValue();
+
+                for (JInternalFrame frame : desktopPane.getAllFrames()) {
+                    if (windowName.equals(frame.getName())) {
+                        frame.setBounds(state.getBounds());
+                        try {
+                            if (state.isCollapsed()) {
+                                frame.setIcon(true);
+                            }
+                        } catch (java.beans.PropertyVetoException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
     }
 }

@@ -1,20 +1,17 @@
 package gui;
 
-import java.awt.BorderLayout;
+import javax.swing.*;
 
-import javax.swing.JInternalFrame;
-import javax.swing.JPanel;
-
-public class GameWindow extends JInternalFrame
-{
-    private final GameVisualizer m_visualizer;
-    public GameWindow()
-    {
+public class GameWindow extends JInternalFrame {
+    public GameWindow(RobotModel model) {
         super("Игровое поле", true, true, true, true);
-        m_visualizer = new GameVisualizer();
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.add(m_visualizer, BorderLayout.CENTER);
-        getContentPane().add(panel);
-        pack();
+        setName("GameWindow");
+        GameVisualizer visualizer = new GameVisualizer(model);
+        add(visualizer);
+
+        setSize(600, 500);
+        setLocation(10, 10);
+        setDefaultCloseOperation(HIDE_ON_CLOSE);
     }
 }
+
